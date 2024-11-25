@@ -15,7 +15,8 @@ if "hr_password" not in st.session_state:
     st.session_state.hr_password = stored_password
 ist = pytz.timezone("Asia/Kolkata")
 today_date = datetime.now(ist).strftime("%B %d, %Y")
-st.title(f"Conversenow Lunch Preferences for {today_date}")
+st.title(f"Conversenow Lunch Preferences")
+st.subheader(f"{today_date}")
 tab1, tab2 = st.tabs(["Employee View", "HR View"])
 
 with tab1:
@@ -35,7 +36,7 @@ with tab1:
             st.success("Your preference has been recorded!")
 
 with tab2:
-    st.header("HR View (Restricted Access)")
+    st.header("HR View)")
     password = st.text_input("Enter HR password:", type="password")
     if password == st.session_state.hr_password:
         st.success("Access granted!")
