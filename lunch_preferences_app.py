@@ -13,9 +13,10 @@ response = supabase.table("settings").select("value").eq("key", "hr_password").e
 stored_password = response.data[0]["value"] if response.data else "abhishek"
 if "hr_password" not in st.session_state:
     st.session_state.hr_password = stored_password
-st.title("Lunch Preferences")
-tab1, tab2 = st.tabs(["Employee View", "HR View"])
 ist = pytz.timezone("Asia/Kolkata")
+today_date = datetime.now(ist).strftime("%B %d, %Y")
+st.title(f"Conversenow Lunch Preferences for {today_date}")
+tab1, tab2 = st.tabs(["Employee View", "HR View"])
 
 with tab1:
     st.header("Employee View")
