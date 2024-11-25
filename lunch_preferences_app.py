@@ -1,6 +1,7 @@
 import streamlit as st
 from supabase import create_client
 from datetime import datetime, date
+import pytz
 
 SUPABASE_URL = "https://begzsfzumhzowutdfegx.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlZ3pzZnp1bWh6b3d1dGRmZWd4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjUwODExNSwiZXhwIjoyMDQ4MDg0MTE1fQ.WrzeC7DgRdheuIWeL1E0Sng5LLEPbGpnCB5asKqfNaI"
@@ -8,27 +9,23 @@ supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 if "delete_clicked" not in st.session_state:
     st.session_state.delete_clicked = False
-
 response = supabase.table("settings").select("value").eq("key", "hr_password").execute()
 stored_password = response.data[0]["value"] if response.data else "abhishek"
-
 if "hr_password" not in st.session_state:
     st.session_state.hr_password = stored_password
-
 st.title("Lunch Preferences")
-
 tab1, tab2 = st.tabs(["Employee View", "HR View"])
+ist = pytz.timezone("Asia/Kolkata")
 
 with tab1:
     st.header("Employee View")
     employee_name = st.text_input("Enter your name:")
     preference = st.radio("Do you want lunch today?", ("Yes", "No"))
-
     if st.button("Submit"):
         if employee_name.strip() == "":
             st.error("Name cannot be empty!")
         else:
-            current_time = datetime.now().isoformat()
+            current_time = datetime.now(ist).isoformat()
             supabase.table("preferences").insert({
                 "employee_name": employee_name,
                 "preference": preference,
@@ -39,44 +36,35 @@ with tab1:
 with tab2:
     st.header("HR View (Restricted Access)")
     password = st.text_input("Enter HR password:", type="password")
-
     if password == st.session_state.hr_password:
         st.success("Access granted!")
-
         selected_date = st.date_input("Select a date to view preferences", value=date.today())
-
         response = supabase.table("preferences").select("*").execute()
         preferences = response.data if response.data else []
-
         filtered_preferences = [
             {
                 "Name": pref["employee_name"],
                 "Preference": pref["preference"],
-                "Time": datetime.fromisoformat(pref["created_at"]).strftime("%H:%M"),
+                "Time": datetime.fromisoformat(pref["created_at"]).astimezone(ist).strftime("%H:%M %p"),  # Convert to IST
             }
             for pref in preferences
             if pref["created_at"][:10] == selected_date.isoformat()
         ]
-
         st.subheader(f"Preferences for {selected_date}")
         if filtered_preferences:
             st.table(filtered_preferences)
-
             yes_count = sum(1 for entry in filtered_preferences if entry["Preference"] == "Yes")
             no_count = sum(1 for entry in filtered_preferences if entry["Preference"] == "No")
             st.markdown(f"**Total Yes: {yes_count} | Total No: {no_count}**")
         else:
             st.info("No preferences have been recorded for this date.")
-
         if st.button(f"Delete Preferences for {selected_date}"):
             supabase.rpc("delete_todays_preferences", {"date": selected_date.isoformat()}).execute()
             st.session_state.delete_clicked = True
             st.warning(f"All preferences for {selected_date} have been deleted!")
-
         st.subheader("Change Password")
         new_password = st.text_input("Enter new password:", type="password")
         confirm_password = st.text_input("Confirm new password:", type="password")
-
         if st.button("Update Password"):
             if new_password.strip() == "":
                 st.error("Password cannot be empty!")
@@ -86,6 +74,5 @@ with tab2:
                 supabase.table("settings").update({"value": new_password}).eq("key", "hr_password").execute()
                 st.session_state.hr_password = new_password
                 st.success("Password has been updated successfully!")
-
     elif password != "":
         st.error("Incorrect password!")
