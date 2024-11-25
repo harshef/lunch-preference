@@ -45,7 +45,7 @@ with tab2:
             {
                 "Name": pref["employee_name"],
                 "Preference": pref["preference"],
-                "Time": datetime.fromisoformat(pref["created_at"]).astimezone(ist).strftime("%H:%M %p"),  # Convert to IST
+                "Time": datetime.fromisoformat(pref["created_at"]).strftime("%H:%M %p"),  # Convert to IST
             }
             for pref in preferences
             if pref["created_at"][:10] == selected_date.isoformat()
