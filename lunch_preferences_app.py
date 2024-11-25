@@ -2,8 +2,8 @@ import streamlit as st
 from supabase import create_client
 import os
 
-SUPABASE_URL = st.secrets["SUPABASE_URL"]
-SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+SUPABASE_URL = "https://begzsfzumhzowutdfegx.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJlZ3pzZnp1bWh6b3d1dGRmZWd4Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTczMjUwODExNSwiZXhwIjoyMDQ4MDg0MTE1fQ.WrzeC7DgRdheuIWeL1E0Sng5LLEPbGpnCB5asKqfNaI"
 supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 if "delete_clicked" not in st.session_state:
