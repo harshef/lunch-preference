@@ -1,71 +1,41 @@
 import streamlit as st
-import sqlite3
-from datetime import date
+from supabase import create_client
+import os
 
-# Initialize SQLite database
-conn = sqlite3.connect("lunch_preferences.db")
-cursor = conn.cursor()
-
-# Create table for storing preferences
-cursor.execute("""
-CREATE TABLE IF NOT EXISTS preferences (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    employee_name TEXT NOT NULL,
-    preference TEXT NOT NULL,
-    date DATE NOT NULL
-)
-""")
-conn.commit()
-
-# Initialize session state for password and HR view refresh
-if "hr_password" not in st.session_state:
-    st.session_state.hr_password = "abhishek"
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 if "delete_clicked" not in st.session_state:
     st.session_state.delete_clicked = False
 
-# App title
-st.title("Lunch Preference Manager")
+response = supabase.table("settings").select("value").eq("key", "hr_password").execute()
+stored_password = response.data[0]["value"] if response.data else "abhishek"
 
-# Current date
-current_date = date.today()
+if "hr_password" not in st.session_state:
+    st.session_state.hr_password = stored_password
 
-# Tabs for Employee and HR views
+st.title("Lunch Preferences")
+
 tab1, tab2 = st.tabs(["Employee View", "HR View"])
 
-# Employee View
 with tab1:
-    st.header("Mark Your Lunch Preference")
+    st.header("Employee View")
     employee_name = st.text_input("Enter your name:")
-    preference = st.radio("Do you want lunch today?", ["Yes", "No"])
+    preference = st.radio("Do you want lunch today?", ("Yes", "No"))
 
-    if st.button("Submit Preference"):
+    if st.button("Submit"):
         if employee_name.strip() == "":
             st.error("Name cannot be empty!")
         else:
-            # Check if the employee already submitted for today
-            cursor.execute("""
-            SELECT id FROM preferences WHERE employee_name = ? AND date = ?
-            """, (employee_name, current_date))
-            result = cursor.fetchone()
+            current_time = datetime.now().isoformat()
+            supabase.table("preferences").insert({
+                "employee_name": employee_name,
+                "preference": preference,
+                "created_at": current_time
+            }).execute()
+            st.success("Your preference has been recorded!")
 
-            if result:
-                # Update preference
-                cursor.execute("""
-                UPDATE preferences SET preference = ? WHERE id = ?
-                """, (preference, result[0]))
-                conn.commit()
-                st.success("Your preference has been updated!")
-            else:
-                # Insert new preference
-                cursor.execute("""
-                INSERT INTO preferences (employee_name, preference, date)
-                VALUES (?, ?, ?)
-                """, (employee_name, preference, current_date))
-                conn.commit()
-                st.success("Your preference has been recorded!")
-
-# HR View
 with tab2:
     st.header("HR View (Restricted Access)")
     password = st.text_input("Enter HR password:", type="password")
@@ -73,42 +43,36 @@ with tab2:
     if password == st.session_state.hr_password:
         st.success("Access granted!")
 
-        # Fetch preferences for today
-        if not st.session_state.delete_clicked:
-            cursor.execute("""
-            SELECT employee_name, preference FROM preferences WHERE date = ?
-            """, (current_date,))
-            data = cursor.fetchall()
+        selected_date = st.date_input("Select a date to view preferences", value=date.today())
+
+        response = supabase.table("preferences").select("*").execute()
+        preferences = response.data if response.data else []
+
+        filtered_preferences = [
+            {
+                "Name": pref["employee_name"],
+                "Preference": pref["preference"],
+                "Time": datetime.fromisoformat(pref["created_at"]).strftime("%H:%M"),
+            }
+            for pref in preferences
+            if pref["created_at"][:10] == selected_date.isoformat()
+        ]
+
+        st.subheader(f"Preferences for {selected_date}")
+        if filtered_preferences:
+            st.table(filtered_preferences)
+
+            yes_count = sum(1 for entry in filtered_preferences if entry["Preference"] == "Yes")
+            no_count = sum(1 for entry in filtered_preferences if entry["Preference"] == "No")
+            st.markdown(f"**Total Yes: {yes_count} | Total No: {no_count}**")
         else:
-            data = []  # Clear data after deletion
+            st.info("No preferences have been recorded for this date.")
 
-        # Display preferences table
-        st.subheader("Today's Lunch Preferences")
-        if data:
-            st.table(data)
-
-            # Count total "Yes" and "No" responses
-            cursor.execute("""
-            SELECT preference, COUNT(*) FROM preferences WHERE date = ? GROUP BY preference
-            """, (current_date,))
-            counts = cursor.fetchall()
-            total_yes = sum(count for pref, count in counts if pref == "Yes")
-            total_no = sum(count for pref, count in counts if pref == "No")
-
-            # Display totals
-            st.markdown(f"**Total Yes: {total_yes}**")
-            st.markdown(f"**Total No: {total_no}**")
-        else:
-            st.info("No preferences have been recorded for today.")
-
-        # Add button to delete data
-        if st.button("Delete Today's Preferences"):
-            cursor.execute("DELETE FROM preferences WHERE date = ?", (current_date,))
-            conn.commit()
+        if st.button(f"Delete Preferences for {selected_date}"):
+            supabase.rpc("delete_todays_preferences", {"date": selected_date.isoformat()}).execute()
             st.session_state.delete_clicked = True
-            st.warning("All preferences for today have been deleted.")
+            st.warning(f"All preferences for {selected_date} have been deleted!")
 
-        # Allow HR to change the password
         st.subheader("Change Password")
         new_password = st.text_input("Enter new password:", type="password")
         confirm_password = st.text_input("Confirm new password:", type="password")
@@ -119,10 +83,9 @@ with tab2:
             elif new_password != confirm_password:
                 st.error("Passwords do not match!")
             else:
+                supabase.table("settings").update({"value": new_password}).eq("key", "hr_password").execute()
                 st.session_state.hr_password = new_password
                 st.success("Password has been updated successfully!")
+
     elif password != "":
         st.error("Incorrect password!")
-
-# Close the database connection when done
-conn.close()
